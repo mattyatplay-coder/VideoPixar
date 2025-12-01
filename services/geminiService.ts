@@ -9,7 +9,29 @@ import {
   VideoGenerationReferenceImage,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import {GenerateVideoParams, GenerationMode, VeoModel} from '../types';
+import {AspectRatio, GenerateVideoParams, GenerationMode, Resolution, VeoModel} from '../types';
+
+interface VideoGenerationConfig {
+  numberOfVideos: number;
+  resolution: Resolution;
+  aspectRatio?: AspectRatio;
+  referenceImages?: VideoGenerationReferenceImage[];
+  lastFrame?: {
+    imageBytes: string;
+    mimeType: string;
+  };
+}
+
+interface GenerateVideosParameters {
+  model: string;
+  config: VideoGenerationConfig;
+  prompt?: string;
+  image?: {
+    imageBytes: string;
+    mimeType: string;
+  };
+  video?: Video;
+}
 
 export const generateVideo = async (
   params: GenerateVideoParams,
@@ -18,7 +40,7 @@ export const generateVideo = async (
 
   const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
 
-  const config: any = {
+  const config: VideoGenerationConfig = {
     numberOfVideos: 1,
     resolution: params.resolution,
   };
@@ -43,7 +65,7 @@ export const generateVideo = async (
       ? params.startFrame
       : params.endFrame;
 
-  const generateVideoPayload: any = {
+  const generateVideoPayload: GenerateVideosParameters = {
     model: model,
     config: config,
   };
@@ -131,17 +153,25 @@ export const generateVideo = async (
   let operation = await ai.models.generateVideos(generateVideoPayload);
   console.log('Video generation operation started:', operation);
 
-  while (!operation.done) {
+  const MAX_ATTEMPTS = 60; // 10 minutes (60 * 10s)
+  let attempts = 0;
+
+  while (!operation.done && attempts < MAX_ATTEMPTS) {
     await new Promise((resolve) => setTimeout(resolve, 10000));
     console.log('...Generating...');
     operation = await ai.operations.getVideosOperation({operation: operation});
+    attempts++;
+  }
+
+  if (!operation.done) {
+     throw new Error('Video generation timed out after 10 minutes. Please try again.');
   }
 
   if (operation?.response) {
     const videos = operation.response.generatedVideos;
 
     if (!videos || videos.length === 0) {
-      throw new Error('No videos were generated.');
+      throw new Error('Video generation completed but no videos were returned. This may indicate an issue with the API or the request parameters.');
     }
 
     const firstVideo = videos[0];

@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import {Video} from '@google/genai';
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {enhancePrompt} from '../services/geminiService';
 import {
   AspectRatio,
+  Character,
   GenerateVideoParams,
   GenerationMode,
   ImageFile,
@@ -16,282 +17,37 @@ import {
   VeoModel,
   VideoFile,
 } from '../types';
+import AdvancedSettings from './AdvancedSettings';
+import CharacterManager from './CharacterManager';
+import ImageUpload from './ImageUpload';
+import ModeSelector from './ModeSelector';
 import SceneStrip from './SceneStrip';
+import SuggestionChips from './SuggestionChips';
+import VideoUpload from './VideoUpload';
 import {
   ArrowRightIcon,
-  ChevronDownIcon,
-  FilmIcon,
-  FramesModeIcon,
-  PlusIcon,
-  RectangleStackIcon,
-  ReferencesModeIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
-  TextModeIcon,
-  TvIcon,
+  UsersIcon,
   WandIcon,
-  XMarkIcon,
 } from './icons';
-
-const aspectRatioDisplayNames: Record<AspectRatio, string> = {
-  [AspectRatio.LANDSCAPE]: 'Landscape (16:9)',
-  [AspectRatio.PORTRAIT]: 'Portrait (9:16)',
-};
-
-const modeIcons: Record<GenerationMode, React.ReactNode> = {
-  [GenerationMode.TEXT_TO_VIDEO]: <TextModeIcon className="w-5 h-5" />,
-  [GenerationMode.FRAMES_TO_VIDEO]: <FramesModeIcon className="w-5 h-5" />,
-  [GenerationMode.REFERENCES_TO_VIDEO]: (
-    <ReferencesModeIcon className="w-5 h-5" />
-  ),
-  [GenerationMode.EXTEND_VIDEO]: <FilmIcon className="w-5 h-5" />,
-};
-
-// Common keywords for video generation
-const SUGGESTION_CHIPS = [
-  'Cinematic',
-  '4k',
-  'Photorealistic',
-  'Slow Motion',
-  'Drone Shot',
-  'Golden Hour',
-  'Cyberpunk',
-  'Studio Lighting',
-  'Macro',
-  'Wide Angle',
-  'Volumetric Lighting',
-  'Bokeh',
-];
-
-const fileToBase64 = <T extends {file: File; base64: string}>(
-  file: File,
-): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      if (base64) {
-        resolve({file, base64} as T);
-      } else {
-        reject(new Error('Failed to read file as base64.'));
-      }
-    };
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
-  });
-};
-const fileToImageFile = (file: File): Promise<ImageFile> =>
-  fileToBase64<ImageFile>(file);
-const fileToVideoFile = (file: File): Promise<VideoFile> =>
-  fileToBase64<VideoFile>(file);
-
-const CustomSelect: React.FC<{
-  label: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  disabled?: boolean;
-}> = ({label, value, onChange, icon, children, disabled = false}) => (
-  <div>
-    <label
-      className={`text-xs block mb-1.5 font-medium ${
-        disabled ? 'text-gray-500' : 'text-gray-400'
-      }`}>
-      {label}
-    </label>
-    <div className="relative">
-      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-        {icon}
-      </div>
-      <select
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        className="w-full bg-[#1f1f1f] border border-gray-600 rounded-lg pl-10 pr-8 py-2.5 appearance-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-700/50 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
-        {children}
-      </select>
-      <ChevronDownIcon
-        className={`w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${
-          disabled ? 'text-gray-600' : 'text-gray-400'
-        }`}
-      />
-    </div>
-  </div>
-);
-
-const ImageUpload: React.FC<{
-  onSelect: (image: ImageFile) => void;
-  onRemove?: () => void;
-  image?: ImageFile | null;
-  label: React.ReactNode;
-}> = ({onSelect, onRemove, image, label}) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Create object URL for preview and cleanup
-  const previewUrl = useMemo(() => {
-    return image ? URL.createObjectURL(image.file) : null;
-  }, [image]);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const imageFile = await fileToImageFile(file);
-        onSelect(imageFile);
-      } catch (error) {
-        console.error('Error converting file:', error);
-      }
-    }
-    // Reset input value to allow selecting the same file again
-    if (inputRef.current) {
-      inputRef.current.value = '';
-    }
-  };
-
-  if (image && previewUrl) {
-    return (
-      <div className="relative w-28 h-20 group">
-        <img
-          src={previewUrl}
-          alt="preview"
-          className="w-full h-full object-cover rounded-lg"
-        />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label="Remove image">
-          <XMarkIcon className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      className="w-28 h-20 bg-gray-700/50 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors">
-      <PlusIcon className="w-6 h-6" />
-      <span className="text-xs mt-1 text-center px-1">{label}</span>
-      <input
-        type="file"
-        ref={inputRef}
-        onChange={handleFileChange}
-        accept="image/*"
-        className="hidden"
-      />
-    </button>
-  );
-};
-
-const VideoUpload: React.FC<{
-  onSelect: (video: VideoFile) => void;
-  onSceneSelect: (sceneId: string) => void;
-  onRemove?: () => void;
-  video?: VideoFile | null;
-  label: React.ReactNode;
-}> = ({onSelect, onSceneSelect, onRemove, video, label}) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Create object URL for preview and cleanup
-  const previewUrl = useMemo(() => {
-    return video ? URL.createObjectURL(video.file) : null;
-  }, [video]);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const videoFile = await fileToVideoFile(file);
-        onSelect(videoFile);
-      } catch (error) {
-        console.error('Error converting file:', error);
-      }
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const sceneId = e.dataTransfer.getData('sceneId');
-    if (sceneId) {
-      onSceneSelect(sceneId);
-      return;
-    }
-
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      fileToVideoFile(file).then(onSelect).catch(console.error);
-    }
-  };
-
-  if (video && previewUrl) {
-    return (
-      <div className="relative w-48 h-28 group">
-        <video
-          src={previewUrl}
-          muted
-          loop
-          className="w-full h-full object-cover rounded-lg"
-        />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label="Remove video">
-          <XMarkIcon className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`w-48 h-28 bg-gray-700/50 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-white transition-all text-center
-        ${isDragging ? 'border-indigo-500 bg-gray-700 ring-2 ring-indigo-500/50' : 'border-gray-600 hover:bg-gray-700'}`}
-    >
-      <PlusIcon className="w-6 h-6 mb-1" />
-      <span className="text-xs px-2 pointer-events-none">{label}</span>
-      <input
-        type="file"
-        ref={inputRef}
-        onChange={handleFileChange}
-        accept="video/*"
-        className="hidden"
-      />
-    </button>
-  );
-};
 
 interface PromptFormProps {
   onGenerate: (params: GenerateVideoParams) => void;
   initialValues?: GenerateVideoParams | null;
   scenes: Scene[];
+  characters: Character[];
+  onAddCharacter: (char: Character) => void;
+  onDeleteCharacter: (id: string) => void;
 }
 
 const PromptForm: React.FC<PromptFormProps> = ({
   onGenerate,
   initialValues,
   scenes,
+  characters,
+  onAddCharacter,
+  onDeleteCharacter,
 }) => {
   const [prompt, setPrompt] = useState(initialValues?.prompt ?? '');
   const [model, setModel] = useState<VeoModel>(
@@ -328,9 +84,8 @@ const PromptForm: React.FC<PromptFormProps> = ({
   const [isEnhancing, setIsEnhancing] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false);
+  const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const modeSelectorRef = useRef<HTMLDivElement>(null);
 
   // Sync state with initialValues prop when it changes
   useEffect(() => {
@@ -348,11 +103,22 @@ const PromptForm: React.FC<PromptFormProps> = ({
       setIsLooping(initialValues.isLooping ?? false);
       
       // Unconditionally sync inputVideoObject from initialValues.
-      // This is crucial for Extend Video mode. If initialValues contains it, set it.
-      // If it doesn't, allow it to be null (or reset).
       setInputVideoObject(initialValues.inputVideoObject ?? null);
     }
   }, [initialValues]);
+
+  // Failsafe: If in Extend mode, and we have inputVideo but not object, try to restore from initialValues
+  useEffect(() => {
+    if (
+      generationMode === GenerationMode.EXTEND_VIDEO &&
+      inputVideo &&
+      !inputVideoObject &&
+      initialValues?.inputVideoObject
+    ) {
+      console.log('Restoring missing inputVideoObject from initialValues');
+      setInputVideoObject(initialValues.inputVideoObject);
+    }
+  }, [generationMode, inputVideo, inputVideoObject, initialValues]);
 
   // Adjust model/resolution based on mode
   useEffect(() => {
@@ -372,19 +138,6 @@ const PromptForm: React.FC<PromptFormProps> = ({
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, [prompt]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        modeSelectorRef.current &&
-        !modeSelectorRef.current.contains(event.target as Node)
-      ) {
-        setIsModeSelectorOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -443,9 +196,25 @@ const PromptForm: React.FC<PromptFormProps> = ({
     });
   };
 
+  const handleCharacterSelect = (char: Character) => {
+    // Append character description to prompt
+    setPrompt((prev) => {
+      const trimmed = prev.trim();
+      const charDescription = `Character: ${char.name} (${char.description})`;
+      return trimmed ? `${trimmed}\n\n${charDescription}` : charDescription;
+    });
+
+    if (char.avatar) {
+      setReferenceImages((prev) => [...prev, char.avatar!]);
+      
+      if (generationMode === GenerationMode.TEXT_TO_VIDEO) {
+         setGenerationMode(GenerationMode.REFERENCES_TO_VIDEO);
+      }
+    }
+  };
+
   const handleSelectMode = (mode: GenerationMode) => {
     setGenerationMode(mode);
-    setIsModeSelectorOpen(false);
     // Reset media when mode changes to avoid confusion
     setStartFrame(null);
     setEndFrame(null);
@@ -478,15 +247,9 @@ const PromptForm: React.FC<PromptFormProps> = ({
       'Describe motion between start and end frames (optional)...',
     [GenerationMode.REFERENCES_TO_VIDEO]:
       'Describe a video using reference and style images...',
-    [GenerationMode.EXTEND_VIDEO]: 'Describe what happens next (required)...',
+    [GenerationMode.EXTEND_VIDEO]:
+      'Describe the specific actions and events that should happen next in the video extension (required)...',
   }[generationMode];
-
-  const selectableModes = [
-    GenerationMode.TEXT_TO_VIDEO,
-    GenerationMode.FRAMES_TO_VIDEO,
-    GenerationMode.REFERENCES_TO_VIDEO,
-    GenerationMode.EXTEND_VIDEO,
-  ];
 
   const renderMediaUploads = () => {
     if (generationMode === GenerationMode.FRAMES_TO_VIDEO) {
@@ -632,9 +395,6 @@ const PromptForm: React.FC<PromptFormProps> = ({
     return null;
   };
 
-  const isRefMode = generationMode === GenerationMode.REFERENCES_TO_VIDEO;
-  const isExtendMode = generationMode === GenerationMode.EXTEND_VIDEO;
-
   let isSubmitDisabled = false;
   let tooltipText = '';
 
@@ -680,7 +440,7 @@ const PromptForm: React.FC<PromptFormProps> = ({
                tooltipText = 'An input video from a previous generation is required to extend.';
            }
         } else if (hasNoExtendPrompt) {
-           tooltipText = 'Please describe what happens next in the prompt.';
+           tooltipText = 'Please describe the next steps in the prompt.';
         }
       }
       break;
@@ -688,82 +448,32 @@ const PromptForm: React.FC<PromptFormProps> = ({
 
   return (
     <div className="relative w-full">
-      {isSettingsOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-3 p-4 bg-[#2c2c2e] rounded-xl border border-gray-700 shadow-2xl z-20">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <CustomSelect
-              label="Model"
-              value={model}
-              onChange={(e) => setModel(e.target.value as VeoModel)}
-              icon={<SparklesIcon className="w-5 h-5 text-gray-400" />}
-              disabled={isRefMode}>
-              {Object.values(VeoModel).map((modelValue) => (
-                <option key={modelValue} value={modelValue}>
-                  {modelValue}
-                </option>
-              ))}
-            </CustomSelect>
-            <CustomSelect
-              label="Aspect Ratio"
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-              icon={<RectangleStackIcon className="w-5 h-5 text-gray-400" />}
-              disabled={isRefMode || isExtendMode}>
-              {Object.entries(aspectRatioDisplayNames).map(([key, name]) => (
-                <option key={key} value={key}>
-                  {name}
-                </option>
-              ))}
-            </CustomSelect>
-            <div>
-              <CustomSelect
-                label="Resolution"
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value as Resolution)}
-                icon={<TvIcon className="w-5 h-5 text-gray-400" />}
-                disabled={isRefMode || isExtendMode}>
-                <option value={Resolution.P720}>720p</option>
-                <option value={Resolution.P1080}>1080p</option>
-              </CustomSelect>
-              {resolution === Resolution.P1080 && (
-                <p className="text-xs text-yellow-400/80 mt-2">
-                  1080p videos can't be extended.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <CharacterManager
+        isOpen={isCharacterManagerOpen}
+        onClose={() => setIsCharacterManagerOpen(false)}
+        characters={characters}
+        onAddCharacter={onAddCharacter}
+        onDeleteCharacter={onDeleteCharacter}
+        onSelectCharacter={handleCharacterSelect}
+      />
+
+      <AdvancedSettings
+        isOpen={isSettingsOpen}
+        model={model}
+        setModel={setModel}
+        aspectRatio={aspectRatio}
+        setAspectRatio={setAspectRatio}
+        resolution={resolution}
+        setResolution={setResolution}
+        generationMode={generationMode}
+      />
+
       <form onSubmit={handleSubmit} className="w-full">
         {renderMediaUploads()}
         <div className="flex flex-col gap-3">
           <div className="flex items-end gap-2 bg-[#1f1f1f] border border-gray-600 rounded-2xl p-2 shadow-lg focus-within:ring-2 focus-within:ring-indigo-500">
-            <div className="relative" ref={modeSelectorRef}>
-              <button
-                type="button"
-                onClick={() => setIsModeSelectorOpen((prev) => !prev)}
-                className="flex shrink-0 items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-gray-700 text-gray-300 hover:text-white transition-colors"
-                aria-label="Select generation mode">
-                {modeIcons[generationMode]}
-                <span className="font-medium text-sm whitespace-nowrap">
-                  {generationMode}
-                </span>
-              </button>
-              {isModeSelectorOpen && (
-                <div className="absolute bottom-full mb-2 w-60 bg-[#2c2c2e] border border-gray-600 rounded-lg shadow-xl overflow-hidden z-20">
-                  {selectableModes.map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => handleSelectMode(mode)}
-                      className={`w-full text-left flex items-center gap-3 p-3 hover:bg-indigo-600/50 ${generationMode === mode ? 'bg-indigo-600/30 text-white' : 'text-gray-300'}`}>
-                      {modeIcons[mode]}
-                      <span>{mode}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ModeSelector currentMode={generationMode} onSelect={handleSelectMode} />
+            
             <textarea
               ref={textareaRef}
               value={prompt}
@@ -784,6 +494,13 @@ const PromptForm: React.FC<PromptFormProps> = ({
               }`}
               title="Enhance prompt with AI">
               <WandIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCharacterManagerOpen(true)}
+              className={`p-2.5 rounded-full hover:bg-gray-700 ${isCharacterManagerOpen ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
+              title="Character Control Panel">
+              <UsersIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -809,18 +526,7 @@ const PromptForm: React.FC<PromptFormProps> = ({
               )}
             </div>
           </div>
-          {/* Suggestion Chips */}
-          <div className="flex flex-wrap gap-2 px-2">
-            {SUGGESTION_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => addKeyword(chip)}
-                className="px-3 py-1 text-xs font-medium text-gray-400 bg-gray-800 border border-gray-700 rounded-full hover:text-white hover:border-indigo-500/50 hover:bg-gray-700 transition-colors">
-                + {chip}
-              </button>
-            ))}
-          </div>
+          <SuggestionChips onAddKeyword={addKeyword} />
         </div>
         
         {/* Scene Gallery */}

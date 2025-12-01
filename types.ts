@@ -53,6 +53,13 @@ export interface Scene {
   timestamp: number;
 }
 
+export interface Character {
+  id: string;
+  name: string;
+  description: string;
+  avatar?: ImageFile | null;
+}
+
 export interface GenerateVideoParams {
   prompt: string;
   model: VeoModel;

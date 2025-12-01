@@ -1,5 +1,4 @@
 
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -24,7 +23,10 @@ import {
   SlidersHorizontal,
   Smile,
   Sparkles,
+  Trash2,
   Tv,
+  UserPlus,
+  Users,
   Wand2,
   X,
 } from 'lucide-react';
@@ -120,4 +122,16 @@ export const DownloadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (
 
 export const PencilIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <Pencil {...defaultProps} {...props} />
+);
+
+export const UsersIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Users {...defaultProps} {...props} />
+);
+
+export const UserPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <UserPlus {...defaultProps} {...props} />
+);
+
+export const TrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Trash2 {...defaultProps} {...props} />
 );

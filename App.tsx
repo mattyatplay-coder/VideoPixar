@@ -13,6 +13,7 @@ import VideoResult from './components/VideoResult';
 import {generateVideo} from './services/geminiService';
 import {
   AppState,
+  Character,
   GenerateVideoParams,
   GenerationMode,
   Resolution,
@@ -33,10 +34,16 @@ const App: React.FC = () => {
   
   // Store generated scenes
   const [scenes, setScenes] = useState<Scene[]>([]);
+  
+  // Store user-defined characters
+  const [characters, setCharacters] = useState<Character[]>([]);
 
   // A single state to hold the initial values for the prompt form
   const [initialFormValues, setInitialFormValues] =
     useState<GenerateVideoParams | null>(null);
+
+  // Form key to force remounting of PromptForm only when needed
+  const [formKey, setFormKey] = useState(0);
 
   // Check for API key on initial load
   useEffect(() => {
@@ -57,6 +64,15 @@ const App: React.FC = () => {
     };
     checkApiKey();
   }, []);
+
+  // Clean up main video URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
+  }, [videoUrl]);
 
   const showStatusError = (message: string) => {
     setErrorMessage(message);
@@ -161,6 +177,7 @@ const App: React.FC = () => {
     setLastVideoObject(null);
     setLastVideoBlob(null);
     setInitialFormValues(null); // Clear the form state
+    setFormKey(prev => prev + 1); // Reset form
   }, []);
 
   const handleTryAgainFromError = useCallback(() => {
@@ -168,6 +185,7 @@ const App: React.FC = () => {
       setInitialFormValues(lastConfig);
       setAppState(AppState.IDLE);
       setErrorMessage(null);
+      setFormKey(prev => prev + 1); // Reset form with last config
     } else {
       // Fallback to a fresh start if there's no last config
       handleNewVideo();
@@ -180,6 +198,7 @@ const App: React.FC = () => {
       setAppState(AppState.IDLE);
       setVideoUrl(null);
       setErrorMessage(null);
+      setFormKey(prev => prev + 1); // Reset form with last config
     }
   }, [lastConfig]);
 
@@ -188,9 +207,8 @@ const App: React.FC = () => {
       try {
         console.log('Preparing to extend video. Checking object:', lastVideoObject);
         // Basic check to ensure video object isn't just an empty object or null
-        // Also check specifically for 'name' which is the resource ID required by the API.
-        if (!lastVideoObject || typeof lastVideoObject !== 'object' || !lastVideoObject.name) {
-           throw new Error("Invalid video object reference. Missing resource name.");
+        if (!lastVideoObject || typeof lastVideoObject !== 'object') {
+           throw new Error("Invalid video object reference.");
         }
 
         const file = new File([lastVideoBlob], 'last_video.mp4', {
@@ -216,6 +234,7 @@ const App: React.FC = () => {
         setAppState(AppState.IDLE);
         setVideoUrl(null);
         setErrorMessage(null);
+        setFormKey(prev => prev + 1); // Reset form with new extend config
       } catch (error) {
         console.error('Failed to process video for extension:', error);
         const message =
@@ -230,6 +249,15 @@ const App: React.FC = () => {
 
   const handlePresetSelect = (params: GenerateVideoParams) => {
     setInitialFormValues(params);
+    setFormKey(prev => prev + 1); // Reset form with preset
+  };
+
+  const handleAddCharacter = (char: Character) => {
+    setCharacters((prev) => [...prev, char]);
+  };
+
+  const handleDeleteCharacter = (id: string) => {
+    setCharacters((prev) => prev.filter((c) => c.id !== id));
   };
 
   const renderError = (message: string) => (
@@ -262,11 +290,13 @@ const App: React.FC = () => {
             </div>
             <div className="pb-4">
               <PromptForm
-                // Force a remount when initialValues change to ensure state is correctly initialized
-                key={initialFormValues ? `form-${initialFormValues.mode}-${Date.now()}` : 'empty'}
+                key={formKey}
                 onGenerate={handleGenerate}
                 initialValues={initialFormValues}
                 scenes={scenes}
+                characters={characters}
+                onAddCharacter={handleAddCharacter}
+                onDeleteCharacter={handleDeleteCharacter}
               />
             </div>
           </>
