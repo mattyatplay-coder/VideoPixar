@@ -43,18 +43,18 @@ export const generateVideo = async (
   const config: VideoGenerationConfig = {
     numberOfVideos: 1,
     resolution: params.resolution,
+    aspectRatio: params.aspectRatio, // Always include aspect ratio
   };
 
-  // Conditionally add aspect ratio. It's not used for extending videos.
-  if (params.mode !== GenerationMode.EXTEND_VIDEO) {
-    config.aspectRatio = params.aspectRatio;
-  }
-
-  // Force Veo 3.1 Pro (not fast) if reference images are present, 
-  // as per best practices (or requirement) for multimodal inputs.
+  // Force Veo 3.1 Pro (not fast) if reference images are present OR if extending a video.
+  // The Fast model often does not support the 'video' property for extension or complex reference inputs.
   let model = params.model;
-  if (params.referenceImages && params.referenceImages.length > 0) {
+  if (
+      (params.referenceImages && params.referenceImages.length > 0) ||
+      params.mode === GenerationMode.EXTEND_VIDEO
+  ) {
       model = VeoModel.VEO; // 'veo-3.1-generate-preview'
+      console.log('Switching to Standard Veo model (non-fast) for advanced features (Extension or References).');
   }
 
   // Handle Last Frame Logic (Common to FRAMES mode and EXTEND mode)

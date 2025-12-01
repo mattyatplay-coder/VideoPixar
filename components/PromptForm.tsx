@@ -429,6 +429,14 @@ const PromptForm: React.FC<PromptFormProps> = ({
       const hasInputObject = !!inputVideoObject;
       const hasNoExtendPrompt = !prompt.trim();
       
+      if (generationMode === GenerationMode.EXTEND_VIDEO) {
+         console.log('Validating Extend Video Mode:', {
+            hasInputFile,
+            hasInputObject,
+            hasNoExtendPrompt
+         });
+      }
+      
       // If we have the file but lost the object (manually uploaded or state lost), we are in an invalid state for extension.
       isSubmitDisabled = !hasInputObject || hasNoExtendPrompt;
       
