@@ -82,6 +82,11 @@ const PromptForm: React.FC<PromptFormProps> = ({
   );
   const [isLooping, setIsLooping] = useState(initialValues?.isLooping ?? false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  
+  // Debug logging for video object changes
+  useEffect(() => {
+    console.log('inputVideoObject changed:', inputVideoObject);
+  }, [inputVideoObject]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
@@ -102,23 +107,24 @@ const PromptForm: React.FC<PromptFormProps> = ({
       setInputVideo(initialValues.inputVideo ?? null);
       setIsLooping(initialValues.isLooping ?? false);
       
-      // Unconditionally sync inputVideoObject from initialValues.
-      setInputVideoObject(initialValues.inputVideoObject ?? null);
+      // CRITICAL: Explicitly set the video object, even if it's the same reference
+      // This ensures it's not lost during remounts
+      if (initialValues.inputVideoObject) {
+        console.log('Setting inputVideoObject from initialValues:', initialValues.inputVideoObject);
+        setInputVideoObject(initialValues.inputVideoObject);
+      } else {
+        setInputVideoObject(null);
+      }
     }
   }, [initialValues]);
 
-  // Failsafe: If in Extend mode, and we have inputVideo but not object, try to restore from initialValues
+  // Additional safeguard: Ensure video object is set when input video changes in EXTEND mode
   useEffect(() => {
-    if (
-      generationMode === GenerationMode.EXTEND_VIDEO &&
-      inputVideo &&
-      !inputVideoObject &&
-      initialValues?.inputVideoObject
-    ) {
-      console.log('Restoring missing inputVideoObject from initialValues');
+    if (generationMode === GenerationMode.EXTEND_VIDEO && initialValues?.inputVideoObject && !inputVideoObject) {
+      console.log('FAILSAFE: Restoring video object for extend mode');
       setInputVideoObject(initialValues.inputVideoObject);
     }
-  }, [generationMode, inputVideo, inputVideoObject, initialValues]);
+  }, [generationMode, initialValues?.inputVideoObject, inputVideoObject]);
 
   // Adjust model/resolution based on mode
   useEffect(() => {
@@ -214,6 +220,13 @@ const PromptForm: React.FC<PromptFormProps> = ({
   };
 
   const handleSelectMode = (mode: GenerationMode) => {
+    // Don't reset if we're already in this mode (prevents accidental data loss)
+    if (mode === generationMode) {
+      console.log('Already in mode:', mode, '- not resetting media');
+      return;
+    }
+    
+    console.log('Switching mode from', generationMode, 'to', mode);
     setGenerationMode(mode);
     // Reset media when mode changes to avoid confusion
     setStartFrame(null);

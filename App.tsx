@@ -203,6 +203,12 @@ const App: React.FC = () => {
   }, [lastConfig]);
 
   const handleExtend = useCallback(async () => {
+    console.log('=== EXTEND VIDEO INITIATED ===');
+    console.log('lastConfig:', lastConfig);
+    console.log('lastVideoBlob exists:', !!lastVideoBlob);
+    console.log('lastVideoObject:', lastVideoObject);
+    console.log('lastVideoObject type:', typeof lastVideoObject);
+    
     if (lastConfig && lastVideoBlob && lastVideoObject) {
       try {
         console.log('Preparing to extend video. Checking object:', lastVideoObject);
@@ -216,7 +222,7 @@ const App: React.FC = () => {
         });
         const videoFile: VideoFile = {file, base64: ''};
 
-        setInitialFormValues({
+        const newInitialValues = {
           ...lastConfig, // Carry over model, aspect ratio
           mode: GenerationMode.EXTEND_VIDEO,
           prompt: '', // Start with a blank prompt
@@ -229,12 +235,16 @@ const App: React.FC = () => {
           referenceImages: [],
           styleImage: null,
           isLooping: false,
-        });
+        };
+        
+        console.log('Setting initialFormValues with inputVideoObject:', newInitialValues.inputVideoObject);
+        setInitialFormValues(newInitialValues);
 
         setAppState(AppState.IDLE);
         setVideoUrl(null);
         setErrorMessage(null);
         setFormKey(prev => prev + 1); // Reset form with new extend config
+        console.log('Form key incremented, should remount with video object');
       } catch (error) {
         console.error('Failed to process video for extension:', error);
         const message =
